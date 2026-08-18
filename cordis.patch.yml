@@ -1,0 +1,9 @@
+# dsh-thinking-effort: per-model and per-provider default reasoning-effort editor.
+#
+# Add this loader row to your web profile's cordis.patch.yml (or
+# packages/bundle/web-app/cordis.patch.yml if building from source).
+# The `name` MUST be the full scoped package name, single-quoted —
+# a bare name or unquoted @-prefix will cause ERR_MODULE_NOT_FOUND on boot.
+- insert:
+    - id: ui-thinking-effort
+      name: '@wenxi96/dsh-thinking-effort'

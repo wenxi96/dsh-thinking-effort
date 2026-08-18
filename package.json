@@ -1,0 +1,99 @@
+{
+  "name": "@wenxi96/dsh-thinking-effort",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: visually configure per-model and per-provider default reasoning-effort for llm-pi-ai, over the settings wire face.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && tsdown",
+    "prepare": "tsc -b && tsdown",
+    "bundle": "tsdown",
+    "watch": "tsdown --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/client.js.map",
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wenxi96/dsh-thinking-effort.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wenxi96/dsh-thinking-effort/issues"
+  },
+  "homepage": "https://github.com/wenxi96/dsh-thinking-effort#readme",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "thinking-effort",
+    "reasoning-effort",
+    "llm-pi-ai",
+    "settings"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "peerDependencies": {
+    "@deepseek-ai/dsh-api-remotes": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-connection": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-invariants": ">=0.1.0-rc.6",
+    "@deepseek-ai/cordis": ">=4.0.1",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-api-remotes": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-connection": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-invariants": ">=0.1.0-rc.6",
+    "@deepseek-ai/cordis": ">=4.0.1",
+    "@types/react": "~18.3.1",
+    "lightningcss": "^1.30.0",
+    "react": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
+  }
+}
