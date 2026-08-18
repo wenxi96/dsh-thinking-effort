@@ -24,7 +24,7 @@
 ### 从 npm 安装（推荐）
 
 ```sh
-dsh plugin add @wenxi96/dsh-thinking-effort
+dsh plugin add @chengwd96/dsh-thinking-effort
 ```
 
 ### 从 GitHub 安装
@@ -36,7 +36,7 @@ dsh plugin add github:wenxi96/dsh-thinking-effort#v0.1.0
 # pnpm ≥10 要求对 git 依赖的构建脚本单独授权——将以下内容写入
 # ~/.dsh/profiles/<profile>/pnpm-workspace.yaml，然后重新运行 add：
 onlyBuiltDependencies:
-  - '@wenxi96/dsh-thinking-effort'
+  - '@chengwd96/dsh-thinking-effort'
 ```
 
 ### 从本地检出安装
@@ -55,7 +55,7 @@ dsh plugin add .
 # （追加到你已有的列表末尾）
 - insert:
     - id: ui-thinking-effort
-      name: '@wenxi96/dsh-thinking-effort'
+      name: '@chengwd96/dsh-thinking-effort'
 ```
 
 > **重要：** `name` 的值必须是带引号的完整包名 —— 不带引号的 `@` 前缀会导致 YAML 解析或模块找不到错误。

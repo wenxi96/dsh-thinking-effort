@@ -24,7 +24,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin tha
 ### From npm (recommended)
 
 ```sh
-dsh plugin add @wenxi96/dsh-thinking-effort
+dsh plugin add @chengwd96/dsh-thinking-effort
 ```
 
 ### From GitHub
@@ -36,7 +36,7 @@ dsh plugin add github:wenxi96/dsh-thinking-effort#v0.1.0
 # pnpm ≥10 requires build permission for git dependencies — add this to
 # ~/.dsh/profiles/<profile>/pnpm-workspace.yaml, then re-run add:
 onlyBuiltDependencies:
-  - '@wenxi96/dsh-thinking-effort'
+  - '@chengwd96/dsh-thinking-effort'
 ```
 
 ### From a local clone
@@ -55,7 +55,7 @@ After installing, add the loader row to your web profile's composition. The reco
 # (append to your existing list)
 - insert:
     - id: ui-thinking-effort
-      name: '@wenxi96/dsh-thinking-effort'
+      name: '@chengwd96/dsh-thinking-effort'
 ```
 
 > **Important:** the `name` value must be the full scoped package name, **single-quoted** — a bare name or unquoted `@`-prefix will cause YAML parse or module-not-found errors on boot.

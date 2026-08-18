@@ -6,4 +6,4 @@
 # a bare name or unquoted @-prefix will cause ERR_MODULE_NOT_FOUND on boot.
 - insert:
     - id: ui-thinking-effort
-      name: '@wenxi96/dsh-thinking-effort'
+      name: '@chengwd96/dsh-thinking-effort'

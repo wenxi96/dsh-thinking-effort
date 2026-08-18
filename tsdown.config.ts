@@ -1,5 +1,5 @@
 /**
- * Self-contained tsdown config for @wenxi96/dsh-thinking-effort.
+ * Self-contained tsdown config for @chengwd96/dsh-thinking-effort.
  *
  * Replicates the DSH client-bundle pattern from the monorepo:
  *   - Host half (ESM): lib/index.js, lib/invariant.js
@@ -18,7 +18,7 @@ import { transform } from 'lightningcss'
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 
-const PLUGIN_ID = '@wenxi96/dsh-thinking-effort'
+const PLUGIN_ID = '@chengwd96/dsh-thinking-effort'
 
 const CLIENT_EXTERNALS: readonly string[] = [
   'react',

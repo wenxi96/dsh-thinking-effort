@@ -1,12 +1,12 @@
 /**
- * Package-owned invariant companion for `@wenxi96/dsh-thinking-effort`.
- * @module @wenxi96/dsh-thinking-effort/invariant
+ * Package-owned invariant companion for `@chengwd96/dsh-thinking-effort`.
+ * @module @chengwd96/dsh-thinking-effort/invariant
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@wenxi96/dsh-thinking-effort'
+const PACKAGE_NAME = '@chengwd96/dsh-thinking-effort'
 
 /** Cordis companion plugin name. */
 export const name = 'dsh-thinking-effort-invariant'

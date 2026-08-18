@@ -1,5 +1,5 @@
 {
-  "name": "@wenxi96/dsh-thinking-effort",
+  "name": "@chengwd96/dsh-thinking-effort",
   "version": "0.1.0",
   "description": "DeepSeek Harness plugin: visually configure per-model and per-provider default reasoning-effort for llm-pi-ai, over the settings wire face.",
   "type": "module",
