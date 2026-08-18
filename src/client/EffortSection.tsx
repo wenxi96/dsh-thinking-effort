@@ -35,7 +35,10 @@ interface ProviderGroup {
 interface SectionState {
   status: 'loading' | 'ready' | 'error'
   providers: ProviderGroup[]
+  /** Raw user layer (for rebuildUserSection). */
   user: unknown
+  /** Merged value (base + user), for models backfill in rebuildUserSection. */
+  mergedValue: unknown
   revision: number
   error: string | null
 }
@@ -160,11 +163,19 @@ function groupsFromValue(value: unknown): ProviderGroup[] {
  * applied changes then overwrite or remove the reasoningEfforts of exactly
  * the models being saved.
  */
-function rebuildUserSection(user: unknown, changes: readonly Change[]): Record<string, unknown> {
+function rebuildUserSection(
+  user: unknown,
+  mergedValue: unknown,
+  changes: readonly Change[],
+): Record<string, unknown> {
   const providersRaw = (user as { providers?: unknown } | undefined)?.providers
   const providers = providersRaw && typeof providersRaw === 'object' ? providersRaw as Record<string, unknown> : {}
+  const mergedProvidersRaw = (mergedValue as { providers?: unknown } | undefined)?.providers
+  const mergedProviders = mergedProvidersRaw && typeof mergedProvidersRaw === 'object'
+    ? mergedProvidersRaw as Record<string, unknown> : {}
   const next: Record<string, unknown> = {}
   const nextProviders: Record<string, unknown> = {}
+  // Copy user-layer providers (deep-copy models so later mutations don't leak).
   for (const provider of Object.keys(providers)) {
     const profile = providers[provider]
     if (!profile || typeof profile !== 'object') continue
@@ -179,6 +190,10 @@ function rebuildUserSection(user: unknown, changes: readonly Change[]): Record<s
     nextProviders[provider] = np
   }
   next.providers = nextProviders
+  // Ensure every provider touched by a setDefault/unsetDefault change carries
+  // the models list from the merged (base+user) value when the user layer has
+  // none — a provider-level shallow merge replaces the whole provider object,
+  // so writing only { reasoning } would erase the models.
   for (const c of changes) {
     if ('model' in c) {
       const np = nextProviders[c.provider]
@@ -191,9 +206,23 @@ function rebuildUserSection(user: unknown, changes: readonly Change[]): Record<s
     } else if (c.op === 'setDefault') {
       const existing = nextProviders[c.provider]
       if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
-        ;(existing as Record<string, unknown>).reasoning = c.reasoning
+        const ep = existing as Record<string, unknown>
+        ep.reasoning = c.reasoning
+        // Backfill models from the merged view when the user layer had none.
+        if (!Array.isArray(ep.models)) {
+          const mergedProfile = mergedProviders[c.provider]
+          const mergedModels = mergedProfile && typeof mergedProfile === 'object'
+            ? (mergedProfile as Record<string, unknown>).models : undefined
+          if (Array.isArray(mergedModels)) ep.models = mergedModels.map((m: unknown) => ({ ...(m as Record<string, unknown>) }))
+        }
       } else {
-        nextProviders[c.provider] = { reasoning: c.reasoning }
+        const entry: Record<string, unknown> = { reasoning: c.reasoning }
+        // Backfill models from the merged view for a brand-new provider entry.
+        const mergedProfile = mergedProviders[c.provider]
+        const mergedModels = mergedProfile && typeof mergedProfile === 'object'
+          ? (mergedProfile as Record<string, unknown>).models : undefined
+        if (Array.isArray(mergedModels)) entry.models = mergedModels.map((m: unknown) => ({ ...(m as Record<string, unknown>) }))
+        nextProviders[c.provider] = entry
       }
     } else {
       const existing = nextProviders[c.provider]
@@ -211,7 +240,7 @@ function rebuildUserSection(user: unknown, changes: readonly Change[]): Record<s
  */
 export function EffortSection({ api }: EffortSectionProps) {
   const [state, setState] = useState<SectionState>({
-    status: 'loading', providers: [], user: undefined, revision: -1, error: null,
+    status: 'loading', providers: [], user: undefined, mergedValue: undefined, revision: -1, error: null,
   })
   const [drafts, setDrafts] = useState<Record<string, ModelDraft>>({})
   const [orig, setOrig] = useState<Record<string, string>>({})
@@ -225,15 +254,20 @@ export function EffortSection({ api }: EffortSectionProps) {
   /** Global default level baked into providers lacking their own, on save; undefined = off. */
   const [globalDefault, setGlobalDefault] = useState<Level | undefined>(undefined)
 
-  const absorb = useCallback((providers: ProviderGroup[], freshUser: unknown, freshRevision: number) => {
+  const absorb = useCallback((providers: ProviderGroup[], freshUser: unknown, freshMergedValue: unknown, freshRevision: number) => {
     const d: Record<string, ModelDraft> = {}
     const o: Record<string, string> = {}
     const pd: Record<string, Level | undefined> = {}
     const po: Record<string, Level | undefined> = {}
-    for (const g of providers) {
+    let inferredGlobal: Level | undefined = undefined
+    let allSame = true
+    for (let i = 0; i < providers.length; i++) {
+      const g = providers[i]!
       const level = isLevel(g.reasoning) ? g.reasoning : undefined
       pd[g.provider] = level
       po[g.provider] = level
+      if (i === 0) inferredGlobal = level
+      else if (inferredGlobal !== level) allSame = false
       for (const m of g.models) {
         const k = keyOf(g.provider, m.id)
         d[k] = draftFromStored(m.reasoningEfforts)
@@ -244,7 +278,8 @@ export function EffortSection({ api }: EffortSectionProps) {
     setOrig(o)
     setDefaults(pd)
     setOrigDefaults(po)
-    setState((prev) => ({ ...prev, providers, user: freshUser, revision: freshRevision, error: null }))
+    setGlobalDefault(allSame && providers.length > 0 ? inferredGlobal : undefined)
+    setState((prev) => ({ ...prev, providers, user: freshUser, mergedValue: freshMergedValue, revision: freshRevision, error: null }))
   }, [])
 
   useEffect(() => {
@@ -257,7 +292,7 @@ export function EffortSection({ api }: EffortSectionProps) {
         if (view === undefined) throw new Error('llm-pi-ai settings are unavailable')
         if (!alive) return
         const groups = groupsFromValue(view.value)
-        absorb(groups, view.user, view.revision)
+        absorb(groups, view.user, view.value, view.revision)
         setState((prev) => ({ ...prev, status: 'ready' }))
       } catch (error) {
         if (alive) setState((prev) => ({ ...prev, status: 'error', error: messageOf(error) }))
@@ -371,7 +406,7 @@ export function EffortSection({ api }: EffortSectionProps) {
       return
     }
     try {
-      const next = rebuildUserSection(state.user, changes)
+      const next = rebuildUserSection(state.user, state.mergedValue, changes)
       const response = await api.settings.update({
         ns: LLM_PI_AI_NS,
         patch: next,
@@ -379,7 +414,7 @@ export function EffortSection({ api }: EffortSectionProps) {
       })
       if (!response.result.ok) throw new Error(response.result.error.message)
       const view = response.result.value
-      absorb(groupsFromValue(view.value), view.user, view.revision)
+      absorb(groupsFromValue(view.value), view.user, view.value, view.revision)
       setNotice({ kind: 'ok', text: '已保存' })
     } catch (error) {
       setNotice({ kind: 'err', text: messageOf(error) })
