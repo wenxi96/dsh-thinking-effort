@@ -27,7 +27,6 @@ interface ModelRow { id: string; name: string; reasoningEfforts: StoredEfforts }
 interface ProviderGroup {
   provider: string
   displayName: string
-  /** Provider-level default reasoning level, when one is configured. */
   reasoning?: string
   models: ModelRow[]
 }
@@ -35,9 +34,7 @@ interface ProviderGroup {
 interface SectionState {
   status: 'loading' | 'ready' | 'error'
   providers: ProviderGroup[]
-  /** Raw user layer (for rebuildUserSection). */
   user: unknown
-  /** Merged value (base + user), for models backfill in rebuildUserSection. */
   mergedValue: unknown
   revision: number
   error: string | null
@@ -53,27 +50,26 @@ export interface EffortSectionProps { api: IApiClient }
 
 const keyOf = (p: string, m: string): string => `${p}\u0000${m}`
 
-/** Narrow an arbitrary stored value to a known pi-ai level. */
 function isLevel(value: unknown): value is Level {
   return typeof value === 'string' && (LEVELS as readonly string[]).includes(value)
-}
-
-/** Levels a model is known to support, when its stored efforts say so; undefined when unknowable. */
-function knownSupportedLevels(efforts: StoredEfforts): Set<Level> | undefined {
-  if (efforts === false) return new Set<Level>(['off'])
-  if (typeof efforts !== 'object' || efforts === null) return undefined
-  return new Set(Object.keys(efforts).filter((key): key is Level => isLevel(key)))
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/**
+ * Default custom levels: off, high, max are checked by default.
+ * off gets null wire (send nothing); high and max use their level name as wire.
+ */
+const DEFAULT_CUSTOM_LEVELS: ReadonlySet<Level> = new Set<Level>(['off', 'high', 'max'])
+
 function defaultLevels(): Record<Level, LevelDraft> {
-  return Object.fromEntries(LEVELS.map((l) => l === 'off'
-    ? [l, { on: true, wire: '' }] as const
-    : [l, { on: l === 'high', wire: l }] as const,
-  )) as Record<Level, LevelDraft>
+  return Object.fromEntries(LEVELS.map((l) => {
+    if (l === 'off') return [l, { on: true, wire: '' }] as const
+    if (DEFAULT_CUSTOM_LEVELS.has(l)) return [l, { on: true, wire: l }] as const
+    return [l, { on: false, wire: l }] as const
+  })) as Record<Level, LevelDraft>
 }
 
 function levelsFromDict(dict: Record<string, string | null>): Record<Level, LevelDraft> {
@@ -157,12 +153,6 @@ function groupsFromValue(value: unknown): ProviderGroup[] {
   return groups
 }
 
-/**
- * Rebuild the user section for one save. Every model keeps ALL its stored
- * fields (reasoningEfforts included) so untouched models are preserved; the
- * applied changes then overwrite or remove the reasoningEfforts of exactly
- * the models being saved.
- */
 function rebuildUserSection(
   user: unknown,
   mergedValue: unknown,
@@ -175,7 +165,6 @@ function rebuildUserSection(
     ? mergedProvidersRaw as Record<string, unknown> : {}
   const next: Record<string, unknown> = {}
   const nextProviders: Record<string, unknown> = {}
-  // Copy user-layer providers (deep-copy models so later mutations don't leak).
   for (const provider of Object.keys(providers)) {
     const profile = providers[provider]
     if (!profile || typeof profile !== 'object') continue
@@ -190,10 +179,6 @@ function rebuildUserSection(
     nextProviders[provider] = np
   }
   next.providers = nextProviders
-  // Ensure every provider touched by a setDefault/unsetDefault change carries
-  // the models list from the merged (base+user) value when the user layer has
-  // none — a provider-level shallow merge replaces the whole provider object,
-  // so writing only { reasoning } would erase the models.
   for (const c of changes) {
     if ('model' in c) {
       const np = nextProviders[c.provider]
@@ -208,7 +193,6 @@ function rebuildUserSection(
       if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
         const ep = existing as Record<string, unknown>
         ep.reasoning = c.reasoning
-        // Backfill models from the merged view when the user layer had none.
         if (!Array.isArray(ep.models)) {
           const mergedProfile = mergedProviders[c.provider]
           const mergedModels = mergedProfile && typeof mergedProfile === 'object'
@@ -217,7 +201,6 @@ function rebuildUserSection(
         }
       } else {
         const entry: Record<string, unknown> = { reasoning: c.reasoning }
-        // Backfill models from the merged view for a brand-new provider entry.
         const mergedProfile = mergedProviders[c.provider]
         const mergedModels = mergedProfile && typeof mergedProfile === 'object'
           ? (mergedProfile as Record<string, unknown>).models : undefined
@@ -234,10 +217,13 @@ function rebuildUserSection(
   return next
 }
 
-/**
- * The settings section body.
- * @param props - the settings wire face supplied by the plugin.
- */
+/** Check if a model matches a search term (case-insensitive substring). */
+function matchesSearch(name: string, id: string, term: string): boolean {
+  if (term.length === 0) return true
+  const lower = term.toLowerCase()
+  return name.toLowerCase().includes(lower) || id.toLowerCase().includes(lower)
+}
+
 export function EffortSection({ api }: EffortSectionProps) {
   const [state, setState] = useState<SectionState>({
     status: 'loading', providers: [], user: undefined, mergedValue: undefined, revision: -1, error: null,
@@ -247,27 +233,25 @@ export function EffortSection({ api }: EffortSectionProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
-  /** Per-provider default level draft; undefined = not set on that provider. */
   const [defaults, setDefaults] = useState<Record<string, Level | undefined>>({})
-  /** Last absorbed per-provider default level, for dirty comparison. */
   const [origDefaults, setOrigDefaults] = useState<Record<string, Level | undefined>>({})
-  /** Global default level baked into providers lacking their own, on save; undefined = off. */
-  const [globalDefault, setGlobalDefault] = useState<Level | undefined>(undefined)
+  const [searchTerms, setSearchTerms] = useState<Record<string, string>>({})
+  /** Provider currently showing the batch-configure modal; null = closed. */
+  const [batchProvider, setBatchProvider] = useState<string | null>(null)
+  /** Batch modal draft state. */
+  const [batchMode, setBatchMode] = useState<Mode>('custom')
+  const [batchLevels, setBatchLevels] = useState<Record<Level, LevelDraft>>(defaultLevels())
 
   const absorb = useCallback((providers: ProviderGroup[], freshUser: unknown, freshMergedValue: unknown, freshRevision: number) => {
     const d: Record<string, ModelDraft> = {}
     const o: Record<string, string> = {}
     const pd: Record<string, Level | undefined> = {}
     const po: Record<string, Level | undefined> = {}
-    let inferredGlobal: Level | undefined = undefined
-    let allSame = true
     for (let i = 0; i < providers.length; i++) {
       const g = providers[i]!
       const level = isLevel(g.reasoning) ? g.reasoning : undefined
       pd[g.provider] = level
       po[g.provider] = level
-      if (i === 0) inferredGlobal = level
-      else if (inferredGlobal !== level) allSame = false
       for (const m of g.models) {
         const k = keyOf(g.provider, m.id)
         d[k] = draftFromStored(m.reasoningEfforts)
@@ -278,7 +262,6 @@ export function EffortSection({ api }: EffortSectionProps) {
     setOrig(o)
     setDefaults(pd)
     setOrigDefaults(po)
-    setGlobalDefault(allSame && providers.length > 0 ? inferredGlobal : undefined)
     setState((prev) => ({ ...prev, providers, user: freshUser, mergedValue: freshMergedValue, revision: freshRevision, error: null }))
   }, [])
 
@@ -311,32 +294,15 @@ export function EffortSection({ api }: EffortSectionProps) {
     return s
   }, [drafts, orig])
 
-  /** Providers whose effective default (explicit ?: global) differs from what is stored. */
   const providerDirty = useMemo(() => {
     const s = new Set<string>()
     for (const g of state.providers) {
       const orig = origDefaults[g.provider]
-      const effective = defaults[g.provider] ?? globalDefault
+      const effective = defaults[g.provider]
       if (orig !== effective) s.add(g.provider)
     }
     return s
-  }, [state.providers, origDefaults, defaults, globalDefault])
-
-  /** Providers where the effective default is known-unsupported by some listed model. */
-  const riskyModelsByProvider = useMemo(() => {
-    const m: Record<string, string[]> = {}
-    for (const g of state.providers) {
-      const effective = defaults[g.provider] ?? globalDefault
-      if (effective === undefined) continue
-      const bad: string[] = []
-      for (const row of g.models) {
-        const supported = knownSupportedLevels(row.reasoningEfforts)
-        if (supported !== undefined && !supported.has(effective)) bad.push(row.name)
-      }
-      if (bad.length > 0) m[g.provider] = bad
-    }
-    return m
-  }, [state.providers, defaults, globalDefault])
+  }, [state.providers, origDefaults, defaults])
 
   const setMode = (k: string, mode: Mode): void => setDrafts((prev): Record<string, ModelDraft> => {
     const cur = prev[k]
@@ -372,9 +338,9 @@ export function EffortSection({ api }: EffortSectionProps) {
     return { ...prev, [k]: cur === undefined ? { mode: 'none', levels: n } : { ...cur, levels: n } }
   })
 
+  /** Reset one model to the defaultLevels() template (off/high/max checked, original wires). */
   const resetModel = (k: string): void => setDrafts((prev): Record<string, ModelDraft> => {
-    const cur = prev[k]
-    return { ...prev, [k]: { mode: 'none', levels: cur ? cur.levels : defaultLevels() } }
+    return { ...prev, [k]: { mode: 'custom', levels: defaultLevels() } }
   })
 
   const toggleGroup = (provider: string): void => setCollapsed((prev) => ({ ...prev, [provider]: !prev[provider] }))
@@ -394,10 +360,8 @@ export function EffortSection({ api }: EffortSectionProps) {
       else if (d.mode === 'off') changes.push({ provider, model, op: 'set', reasoningEfforts: false })
       else changes.push({ provider, model, op: 'set', reasoningEfforts: dictFromDraft(d) })
     }
-    // Provider-level defaults: explicit per-provider choice wins over the global
-    // default; a provider without either gets its stored default removed.
     for (const p of providerDirty) {
-      const effective = defaults[p] ?? globalDefault
+      const effective = defaults[p]
       if (effective === undefined) changes.push({ provider: p, op: 'unsetDefault' })
       else changes.push({ provider: p, op: 'setDefault', reasoning: effective })
     }
@@ -421,7 +385,32 @@ export function EffortSection({ api }: EffortSectionProps) {
     } finally {
       setSaving(false)
     }
-  }, [api, modelDirty, providerDirty, drafts, defaults, globalDefault, state.user, state.revision, absorb])
+  }, [api, modelDirty, providerDirty, drafts, defaults, state.user, state.mergedValue, state.revision, absorb])
+
+  /** Open the batch-configure modal for a provider. */
+  const openBatch = (provider: string): void => {
+    setBatchProvider(provider)
+    setBatchMode('custom')
+    setBatchLevels(defaultLevels())
+  }
+
+  /** Apply batch config to all models of the current provider. */
+  const applyBatch = (): void => {
+    if (batchProvider === null) return
+    const g = state.providers.find((pg) => pg.provider === batchProvider)
+    if (g === undefined) return
+    setDrafts((prev): Record<string, ModelDraft> => {
+      const next = { ...prev }
+      for (const m of g.models) {
+        const k = keyOf(batchProvider, m.id)
+        if (batchMode === 'none') next[k] = { mode: 'none', levels: prev[k]?.levels ?? defaultLevels() }
+        else if (batchMode === 'off') next[k] = { mode: 'off', levels: prev[k]?.levels ?? defaultLevels() }
+        else next[k] = { mode: 'custom', levels: { ...batchLevels } }
+      }
+      return next
+    })
+    setBatchProvider(null)
+  }
 
   if (state.status === 'loading') {
     return (
@@ -470,7 +459,7 @@ export function EffortSection({ api }: EffortSectionProps) {
       <div className={css.head}>
         <h3 className={css.title}>模型思考程度</h3>
         <div className={css.bar}>
-          <span className={css.hint}>按提供商逐项配置默认思考档位与每个模型的思考档位；线网拼写可单独修改。全局默认会在保存时应用到未单独设置的提供方。保存后写回 settings.yaml。</span>
+          <span className={css.hint}>按提供商逐项配置每个模型的思考档位与默认档位；线网拼写可单独修改。保存后写回 settings.yaml。</span>
           <div className={css.barRight}>
             {notice ? (
               <span className={notice.kind === 'ok' ? css.ok : css.err}>{notice.text}</span>
@@ -485,59 +474,138 @@ export function EffortSection({ api }: EffortSectionProps) {
           </div>
         </div>
       </div>
-      <div className={css.global}>
-        <span className={css.globalLabel}>全局默认</span>
-        {renderChips(globalDefault, (next) => setGlobalDefault(next))}
-        <span className={css.pending}>
-          {globalDefault === undefined
-            ? '未设置——不自动应用'
-            : '保存时应用到未单独设置默认档位的提供方'}
-        </span>
-      </div>
       {state.providers.length === 0
         ? <p className={css.note}>未配置任何含显式 models 列表的提供方。</p>
         : (
           <div className={css.groups}>
-            {state.providers.map((g) => (
-              <section key={g.provider} className={css.group}>
-                <button
-                  type="button"
-                  className={css.groupHead}
-                  onClick={() => toggleGroup(g.provider)}
-                  aria-expanded={!collapsed[g.provider]}
-                >
-                  <span className={css.groupTitle}>{g.displayName}</span>
-                  <span className={css.groupChevron}>{collapsed[g.provider] ? '▸' : '▾'}</span>
-                </button>
-                {collapsed[g.provider] ? null : (
-                  <>
-                    <div className={css.providerRow}>
-                      <span className={css.providerLabel}>默认档位</span>
-                      {renderChips(defaults[g.provider], (next) =>
-                        setDefaults((prev) => ({ ...prev, [g.provider]: next })))}
-                      {defaults[g.provider] === undefined && globalDefault !== undefined ? (
-                        <span className={css.pending}>将应用全局 {globalDefault}</span>
-                      ) : null}
-                      {defaults[g.provider] !== undefined && providerDirty.has(g.provider) ? (
-                        <span className={css.dirty}>已修改</span>
-                      ) : null}
-                      {riskyModelsByProvider[g.provider] !== undefined ? (
-                        <span className={css.warnText}>
-                          ⚠ 部分模型不支持该档位：{riskyModelsByProvider[g.provider]?.join('、')}
-                        </span>
-                      ) : null}
-                    </div>
-                    {g.models.length === 0 ? null : (
-                      <div className={css.modelList}>
-                        {g.models.map((m) => renderModel(g.provider, m))}
+            {state.providers.map((g) => {
+              const term = searchTerms[g.provider] ?? ''
+              const filtered = term.length > 0
+                ? g.models.filter((m) => matchesSearch(m.name, m.id, term))
+                : g.models
+              return (
+                <section key={g.provider} className={css.group}>
+                  <button
+                    type="button"
+                    className={css.groupHead}
+                    onClick={() => toggleGroup(g.provider)}
+                    aria-expanded={!collapsed[g.provider]}
+                  >
+                    <span className={css.groupTitle}>{g.displayName}</span>
+                    <span className={css.groupChevron}>{collapsed[g.provider] ? '▸' : '▾'}</span>
+                  </button>
+                  {collapsed[g.provider] ? null : (
+                    <>
+                      <div className={css.providerRow}>
+                        <span className={css.providerLabel}>默认档位</span>
+                        {renderChips(defaults[g.provider], (next) =>
+                          setDefaults((prev) => ({ ...prev, [g.provider]: next })))}
+                        {defaults[g.provider] !== undefined && providerDirty.has(g.provider) ? (
+                          <span className={css.dirty}>已修改</span>
+                        ) : null}
+                        <button type="button" className={css.btn} disabled={saving} onClick={() => openBatch(g.provider)}>一键配置</button>
                       </div>
-                    )}
-                  </>
-                )}
-              </section>
-            ))}
+                      <div className={css.searchRow}>
+                        <input
+                          type="text"
+                          className={css.searchInput}
+                          placeholder="搜索模型名称或 ID…"
+                          value={term}
+                          onChange={(e) => setSearchTerms((prev) => ({ ...prev, [g.provider]: e.target.value }))}
+                        />
+                        {term.length > 0 ? (
+                          <span className={css.searchCount}>{filtered.length} / {g.models.length}</span>
+                        ) : null}
+                      </div>
+                      {filtered.length === 0
+                        ? <p className={css.note}>无匹配模型。</p>
+                        : (
+                          <div className={css.modelList}>
+                            {filtered.map((m) => renderModel(g.provider, m))}
+                          </div>
+                        )}
+                    </>
+                  )}
+                </section>
+              )
+            })}
           </div>
         )}
+      {/* Batch configure modal */}
+      {batchProvider !== null ? (() => {
+        const g = state.providers.find((pg) => pg.provider === batchProvider)
+        if (g === undefined) return null
+        return (
+          <div className={css.modalOverlay} onClick={() => setBatchProvider(null)}>
+            <div className={css.modal} onClick={(e) => e.stopPropagation()}>
+              <h4 className={css.modalTitle}>一键配置 — {g.displayName}</h4>
+              <p className={css.modalHint}>选择配置模式，点击「应用」覆盖该提供商下所有 {g.models.length} 个模型。</p>
+              <div className={css.modes}>
+                <label className={css.radio}>
+                  <input type="radio" name="batch-mode" checked={batchMode === 'none'} onChange={() => setBatchMode('none')} />
+                  <span>不设置</span>
+                </label>
+                <label className={css.radio}>
+                  <input type="radio" name="batch-mode" checked={batchMode === 'off'} onChange={() => setBatchMode('off')} />
+                  <span>不推理</span>
+                </label>
+                <label className={css.radio}>
+                  <input type="radio" name="batch-mode" checked={batchMode === 'custom'} onChange={() => setBatchMode('custom')} />
+                  <span>自定义档位</span>
+                </label>
+                {batchMode === 'custom' ? (
+                  <div className={css.modesTools}>
+                    <button type="button" className={css.mini} onClick={() => {
+                      const n = {} as Record<Level, LevelDraft>
+                      for (const l of LEVELS) n[l] = { on: true, wire: l === 'off' ? '' : l }
+                      setBatchLevels(n)
+                    }}>全选</button>
+                    <button type="button" className={css.mini} onClick={() => {
+                      const n = {} as Record<Level, LevelDraft>
+                      for (const l of LEVELS) n[l] = { on: false, wire: l === 'off' ? '' : l }
+                      setBatchLevels(n)
+                    }}>清空</button>
+                    <button type="button" className={css.mini} onClick={() => setBatchLevels(defaultLevels())}>恢复默认</button>
+                  </div>
+                ) : null}
+              </div>
+              {batchMode === 'custom' ? (
+                <div className={css.customBody}>
+                  <div className={css.levels}>
+                    {LEVELS.map((lv) => (
+                      <label key={lv} className={css.level}>
+                        <input
+                          type="checkbox"
+                          checked={batchLevels[lv]?.on ?? false}
+                          onChange={(e) => setBatchLevels((prev) => ({
+                            ...prev,
+                            [lv]: { ...prev[lv]!, on: e.target.checked },
+                          }))}
+                        />
+                        <span className={css.levelName}>{lv}</span>
+                        <input
+                          type="text"
+                          className={css.wire}
+                          value={batchLevels[lv]?.wire ?? ''}
+                          placeholder={lv === 'off' ? '留空=不发送' : '线网拼写'}
+                          onChange={(e) => setBatchLevels((prev) => ({
+                            ...prev,
+                            [lv]: { ...prev[lv]!, wire: e.target.value },
+                          }))}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className={css.modalActions}>
+                <button type="button" className={css.btn} onClick={() => setBatchProvider(null)}>取消</button>
+                <button type="button" className={css.save} onClick={applyBatch}>应用到所有模型</button>
+              </div>
+            </div>
+          </div>
+        )
+      })() : null}
     </div>
   )
 
@@ -581,14 +649,14 @@ export function EffortSection({ api }: EffortSectionProps) {
                 <label key={lv} className={css.level}>
                   <input
                     type="checkbox"
-                    checked={d.levels[lv].on}
+                    checked={d.levels[lv]?.on ?? false}
                     onChange={(e) => updateLevel(key, lv, { on: e.target.checked })}
                   />
                   <span className={css.levelName}>{lv}</span>
                   <input
                     type="text"
                     className={css.wire}
-                    value={d.levels[lv].wire}
+                    value={d.levels[lv]?.wire ?? ''}
                     placeholder={lv === 'off' ? '留空=不发送' : '线网拼写'}
                     onChange={(e) => updateLevel(key, lv, { wire: e.target.value })}
                   />

@@ -133,6 +133,7 @@
 
 .groupHead:focus-visible {
   outline: none;
+  box-sizing: border-box;
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
   border-radius: 6px;
 }
@@ -150,6 +151,46 @@
   line-height: 1;
   color: var(--dsw-alias-label-secondary);
 }
+
+/* ── Model search ───────────────────────────────────────────────────────── */
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.searchInput {
+  box-sizing: border-box;
+  flex: 1;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.searchInput::placeholder {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.searchCount {
+  flex: none;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── Model list ──────────────────────────────────────────────────────────── */
 
 .modelList {
   display: flex;
@@ -225,12 +266,15 @@
   box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
 }
 
+/* ── Modes (radio group) ─────────────────────────────────────────────────── */
+
 .modes {
   display: flex;
   align-items: center;
   gap: 14px;
   font-size: 12px;
   line-height: 18px;
+  flex-wrap: wrap;
 }
 
 .radio {
@@ -272,6 +316,8 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* ── Custom levels grid ──────────────────────────────────────────────────── */
 
 .customBody {
   display: flex;
@@ -323,24 +369,7 @@
   color: var(--dsw-alias-label-dimmed);
 }
 
-.global {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 0;
-  border-top: 1px solid var(--dsw-alias-border-l2);
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-}
-
-.globalLabel,
-.providerLabel {
-  flex: none;
-  min-width: 56px;
-  font-size: 12px;
-  line-height: 26px;
-  color: var(--dsw-alias-label-secondary);
-}
+/* ── Provider row (default + batch button) ───────────────────────────────── */
 
 .providerRow {
   display: flex;
@@ -350,6 +379,16 @@
   padding: 2px 0 10px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
+
+.providerLabel {
+  flex: none;
+  min-width: 56px;
+  font-size: 12px;
+  line-height: 26px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ── Chip selector ───────────────────────────────────────────────────────── */
 
 .chips {
   display: flex;
@@ -388,14 +427,51 @@
   color: var(--dsw-alias-label-primary-foreground);
 }
 
-.pending {
+/* ── Batch configure modal ───────────────────────────────────────────────── */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.modal {
+  box-sizing: border-box;
+  max-width: 560px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px 24px;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.modalHint {
+  margin: 0;
   font-size: 12px;
-  line-height: 26px;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
 
-.warnText {
-  font-size: 12px;
-  line-height: 26px;
-  color: var(--dsw-alias-state-warn-primary);
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
