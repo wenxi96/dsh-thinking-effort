@@ -31,7 +31,7 @@ dsh plugin add @chengwd96/dsh-thinking-effort
 
 ```sh
 # Pin a tag (recommended for reproducibility)
-dsh plugin add github:wenxi96/dsh-thinking-effort#v0.1.0
+dsh plugin add github:wenxi96/dsh-thinking-effort#v0.1.4
 
 # pnpm ≥10 requires build permission for git dependencies — add this to
 # ~/.dsh/profiles/<profile>/pnpm-workspace.yaml, then re-run add:
@@ -64,7 +64,7 @@ Restart `dsh web`, then open **Settings → 思考程度** (the think icon in th
 
 ## How it works
 
-The section reads and writes the `llm-pi-ai` settings namespace through the browser settings wire face (`connection.api.settings`), so no host-side RPC or restart is needed to see changes.
+The section reads and writes the `llm-pi-ai` settings namespace through the browser settings wire face (`ctx.remote.settings`), so no host-side RPC or restart is needed to see changes.
 
 - **Per-provider default** → writes `llm-pi-ai.providers.<p>.reasoning` (pi-ai uses it as the fallback when no explicit effort is specified on a request).
 - **Per-model reasoningEfforts** → writes `llm-pi-ai.providers.<p>.models.<id>.reasoningEfforts` (the capability dictionary of available levels and their wire spellings).

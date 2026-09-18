@@ -31,7 +31,7 @@ dsh plugin add @chengwd96/dsh-thinking-effort
 
 ```sh
 # 锁定 tag（推荐，可复现）
-dsh plugin add github:wenxi96/dsh-thinking-effort#v0.1.0
+dsh plugin add github:wenxi96/dsh-thinking-effort#v0.1.4
 
 # pnpm ≥10 要求对 git 依赖的构建脚本单独授权——将以下内容写入
 # ~/.dsh/profiles/<profile>/pnpm-workspace.yaml，然后重新运行 add：
@@ -64,7 +64,7 @@ dsh plugin add .
 
 ## 工作原理
 
-该分页通过浏览器 settings wire face（`connection.api.settings`）读写 `llm-pi-ai` settings 命名空间，所以无需 host 端 RPC 或重启即可生效。
+该分页通过浏览器 settings wire face（`ctx.remote.settings`）读写 `llm-pi-ai` settings 命名空间，所以无需 host 端 RPC 或重启即可生效。
 
 - **每提供商默认** → 写 `llm-pi-ai.providers.<p>.reasoning`（pi-ai 在请求未显式指定档位时用它作为兜底）。
 - **每模型 reasoningEfforts** → 写 `llm-pi-ai.providers.<p>.models.<id>.reasoningEfforts`（可用档位及其线网拼写的能力字典）。

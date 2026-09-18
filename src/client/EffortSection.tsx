@@ -1,13 +1,13 @@
 /**
  * Thinking-effort section content: per-model reasoning-effort editor over the
  * `llm-pi-ai` settings namespace, driven entirely through the browser
- * settings wire face (api.settings.describe / api.settings.update). State
+ * settings wire face (settings.describe / settings.update). State
  * derives from the redacted raw user layer, so each saved model's levels are
  * preserved and unrelated models are never rewritten.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import css from './EffortSection.module.css'
 
 /** The llm-pi-ai settings namespace this section edits. */
@@ -46,7 +46,13 @@ type Change =
   | { provider: string; op: 'unsetDefault' }
   | { provider: string; op: 'setDefault'; reasoning: Level }
 
-export interface EffortSectionProps { api: IApiClient }
+/** The settings Remote namespace this section reads and writes. */
+export type SettingsWire = ClientRemote['settings']
+
+/** The section object the wire face accepts for a write. */
+type SettingsSection = Parameters<SettingsWire['update']>[1]
+
+export interface EffortSectionProps { settings: SettingsWire }
 
 const keyOf = (p: string, m: string): string => `${p}\u0000${m}`
 
@@ -157,7 +163,7 @@ function rebuildUserSection(
   user: unknown,
   mergedValue: unknown,
   changes: readonly Change[],
-): Record<string, unknown> {
+): SettingsSection {
   const providersRaw = (user as { providers?: unknown } | undefined)?.providers
   const providers = providersRaw && typeof providersRaw === 'object' ? providersRaw as Record<string, unknown> : {}
   const mergedProvidersRaw = (mergedValue as { providers?: unknown } | undefined)?.providers
@@ -214,7 +220,7 @@ function rebuildUserSection(
       }
     }
   }
-  return next
+  return next as SettingsSection
 }
 
 /** Check if a model matches a search term (case-insensitive substring). */
@@ -224,7 +230,7 @@ function matchesSearch(name: string, id: string, term: string): boolean {
   return name.toLowerCase().includes(lower) || id.toLowerCase().includes(lower)
 }
 
-export function EffortSection({ api }: EffortSectionProps) {
+export function EffortSection({ settings }: EffortSectionProps) {
   const [state, setState] = useState<SectionState>({
     status: 'loading', providers: [], user: undefined, mergedValue: undefined, revision: -1, error: null,
   })
@@ -269,9 +275,9 @@ export function EffortSection({ api }: EffortSectionProps) {
     let alive = true
     const load = async (): Promise<void> => {
       try {
-        const response = await api.settings.describe({})
-        if (!response.result.ok) throw new Error(response.result.error.message)
-        const view = response.result.value.namespaces.find((v) => v.ns === LLM_PI_AI_NS)
+        const response = await settings.describe()
+        if (!response.ok) throw new Error(response.error.message)
+        const view = response.value.namespaces.find((v) => v.ns === LLM_PI_AI_NS)
         if (view === undefined) throw new Error('llm-pi-ai settings are unavailable')
         if (!alive) return
         const groups = groupsFromValue(view.value)
@@ -283,7 +289,7 @@ export function EffortSection({ api }: EffortSectionProps) {
     }
     void load()
     return () => { alive = false }
-  }, [api, absorb])
+  }, [settings, absorb])
 
   const modelDirty = useMemo(() => {
     const s = new Set<string>()
@@ -371,13 +377,9 @@ export function EffortSection({ api }: EffortSectionProps) {
     }
     try {
       const next = rebuildUserSection(state.user, state.mergedValue, changes)
-      const response = await api.settings.update({
-        ns: LLM_PI_AI_NS,
-        patch: next,
-        expectedRevision: state.revision,
-      })
-      if (!response.result.ok) throw new Error(response.result.error.message)
-      const view = response.result.value
+      const response = await settings.update(LLM_PI_AI_NS, next, state.revision)
+      if (!response.ok) throw new Error(response.error.message)
+      const view = response.value
       absorb(groupsFromValue(view.value), view.user, view.value, view.revision)
       setNotice({ kind: 'ok', text: '已保存' })
     } catch (error) {
@@ -385,7 +387,7 @@ export function EffortSection({ api }: EffortSectionProps) {
     } finally {
       setSaving(false)
     }
-  }, [api, modelDirty, providerDirty, drafts, defaults, state.user, state.mergedValue, state.revision, absorb])
+  }, [settings, modelDirty, providerDirty, drafts, defaults, state.user, state.mergedValue, state.revision, absorb])
 
   /** Open the batch-configure modal for a provider. */
   const openBatch = (provider: string): void => {

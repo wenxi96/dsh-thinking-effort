@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.4 — 2026-09-18
+
+### Fixed
+
+- The 思考程度 settings panel showed `加载失败: Cannot read properties of undefined (reading 'settings')` on DSH 0.1.5-rc.2, where `ConnectionHandle.api` no longer exists and the settings wire face moved to the generated Remote namespace `ctx.remote.settings`.
+
+### Changed
+
+- The browser half now injects `remote` / `remote.settings` and reads `ctx.remote.settings` instead of `connection.api.settings`; `describe()` takes no argument, results are bare `RemoteResult` values, and `update` takes `(ns, patch, expectedRevision)` positionally.
+- The client entry types `ctx` as `Context` from `@deepseek-ai/cordis`; `@deepseek-ai/dsh-client-runtime` is retired and no longer a dependency.
+- Peer and dev ranges now require `^0.1.5-rc.2` for the DSH packages, so an older harness can no longer satisfy them silently.
+
 ## 0.1.0 — 2025-08-17
 
 Initial release (extracted from the DSH monorepo `packages/client/ui-thinking-effort`).
