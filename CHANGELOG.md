@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.5 — 2026-09-29
+
+### Fixed
+
+- The plugin stopped taking effect on DSH 0.2.0-rc.1: its `@deepseek-ai/dsh-*` peers stopped at the 0.1.5 line, and the harness compatibility preflight denies every row whose declared dsh peers exclude the running version, so the Settings 思考程度 section never mounted and the row read as disabled with no error.
+
+### Changed
+
+- `@deepseek-ai/dsh-*` peer ranges now accept `^0.1.5-rc.2 || ^0.2.0-rc.1`, the two harness lines this browser half has been verified against.
+- Dev ranges build and typecheck against `^0.2.0-rc.1`.
+
 ## 0.1.4 — 2026-09-18
 
 ### Fixed
